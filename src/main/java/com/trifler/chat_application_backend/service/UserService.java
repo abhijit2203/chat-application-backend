@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import com.trifler.chat_application_backend.DTO.UserSummaryDTO;
 import com.trifler.chat_application_backend.entity.User;
+import com.trifler.chat_application_backend.exception.UserNotFoundException;
 import com.trifler.chat_application_backend.mapper.UserMapper;
 import com.trifler.chat_application_backend.repository.UserRepository;
 
@@ -55,7 +56,9 @@ public class UserService {
     }
 
     private User getCurrentUser(String email) {
-        return userRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found"));
     }
 
 }

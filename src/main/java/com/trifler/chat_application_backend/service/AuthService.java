@@ -12,6 +12,8 @@ import com.trifler.chat_application_backend.DTO.LoginResponseDTO;
 import com.trifler.chat_application_backend.DTO.RegisterRequestDTO;
 import com.trifler.chat_application_backend.DTO.UserResponseDTO;
 import com.trifler.chat_application_backend.entity.User;
+import com.trifler.chat_application_backend.exception.EmailAlreadyExistsException;
+import com.trifler.chat_application_backend.exception.UsernameAlreadyExistsException;
 import com.trifler.chat_application_backend.mapper.UserMapper;
 import com.trifler.chat_application_backend.repository.UserRepository;
 import com.trifler.chat_application_backend.security.JwtService;
@@ -35,11 +37,15 @@ public class AuthService {
 	        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
 
 	        if (userRepository.existsByEmail(email)) {
-	            throw new IllegalArgumentException("Email is already registered");
+	            throw new EmailAlreadyExistsException(
+	                "Email is already registered"
+	            );
 	        }
 
 	        if (userRepository.existsByUsername(username)) {
-	            throw new IllegalArgumentException("Username is already taken");
+	            throw new UsernameAlreadyExistsException(
+	                "Username is already taken"
+	            );
 	        }
 
 	        // Step 1: DTO to Entity
@@ -98,5 +104,7 @@ public class AuthService {
 
 	        return response;
 	    }
+	    
+	   
 
 }

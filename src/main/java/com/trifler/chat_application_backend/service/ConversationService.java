@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.trifler.chat_application_backend.DTO.ConversationMemberResponseDTO;
 import com.trifler.chat_application_backend.DTO.ConversationResponseDTO;
 import com.trifler.chat_application_backend.DTO.CreateGroupRequestDTO;
 import com.trifler.chat_application_backend.entity.Conversation;
@@ -248,6 +249,78 @@ public class ConversationService {
                 conversation,
                 conversation.getName()
         );
+    }
+    
+    @Transactional(readOnly = true)
+    public ConversationResponseDTO getConversationDetails(
+            Long currentUserId, Long conversationId) {
+
+        Conversation conversation = conversationRepository
+                .findById(conversationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Conversation not found"));
+
+        boolean isMember =
+                conversationMemberRepository
+                        .existsByConversation_IdAndUser_Id(
+                                conversationId, currentUserId);
+
+        if (!isMember) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You are not a member of this conversation");
+        }
+
+        String displayName = conversation.getName();
+
+        // Direct chat mein doosre user ka username display hoga
+        if (conversation.getType() == ConversationType.DIRECT) {
+            List<ConversationMember> members =
+                    conversationMemberRepository
+                            .findByConversation_Id(conversationId);
+
+            displayName = members.stream()
+                    .map(ConversationMember::getUser)
+                    .filter(user -> !user.getId().equals(currentUserId))
+                    .map(User::getUsername)
+                    .findFirst()
+                    .orElse("Unknown user");
+        }
+
+        return conversationMapper.toResponse(conversation, displayName);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<ConversationMemberResponseDTO> getConversationMembers(
+            Long currentUserId, Long conversationId) {
+
+        // Check that conversation exists
+        conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Conversation not found"));
+
+        // Only conversation members can view the member list
+        boolean isMember =
+                conversationMemberRepository
+                        .existsByConversation_IdAndUser_Id(
+                                conversationId, currentUserId);
+
+        if (!isMember) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You are not a member of this conversation");
+        }
+
+        return conversationMemberRepository
+                .findByConversation_Id(conversationId)
+                .stream()
+                .map(member -> new ConversationMemberResponseDTO(
+                        member.getUser().getId(),
+                        member.getUser().getUsername(),
+                        member.getUser().getAvatarUrl(),
+                        member.getJoinedAt()
+                ))
+                .toList();
     }
 
 

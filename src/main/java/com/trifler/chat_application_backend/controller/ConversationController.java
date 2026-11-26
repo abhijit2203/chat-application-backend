@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trifler.chat_application_backend.DTO.AddGroupMemberRequestDTO;
+import com.trifler.chat_application_backend.DTO.ConversationMemberResponseDTO;
 import com.trifler.chat_application_backend.DTO.ConversationResponseDTO;
 import com.trifler.chat_application_backend.DTO.CreateGroupRequestDTO;
 import com.trifler.chat_application_backend.DTO.DirectConversationRequestDTO;
@@ -86,6 +87,30 @@ public class ConversationController {
                 conversationId,
                 request.getUserId()
         );
+    }
+    
+    @GetMapping("/{conversationId}/members")
+    public List<ConversationMemberResponseDTO> getConversationMembers(
+            @PathVariable Long conversationId,
+            Authentication authentication) {
+
+        User currentUser = getCurrentUser(authentication);
+
+        return conversationService.getConversationMembers(
+                currentUser.getId(), conversationId);
+    }
+    
+    @GetMapping("/{conversationId}")
+    public ConversationResponseDTO getConversationDetails(
+            @PathVariable Long conversationId,
+            Authentication authentication) {
+    	
+    	 //System.out.println("1. CONTROLLER CALLED");
+
+        User currentUser = getCurrentUser(authentication);
+
+        return conversationService.getConversationDetails(
+                currentUser.getId(), conversationId);
     }
 
     // Resolve the logged-in user from JWT email

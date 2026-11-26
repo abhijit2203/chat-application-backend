@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spring Boot Live Messaging Test</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f3f5f9;color:#172033;margin:0}main{max-width:900px;margin:28px auto;padding:0 16px}
+.panel{background:white;border:1px solid #dce2eb;border-radius:14px;padding:18px;margin:14px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;font-weight:650;margin-bottom:7px}
+input,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cbd3e0;border-radius:8px;font:inherit}textarea{min-height:75px}
+button{border:0;border-radius:8px;padding:10px 14px;background:#285bd4;color:white;font-weight:650;cursor:pointer;margin:10px 6px 0 0}button.secondary{background:#e9edf5;color:#23304a}button.danger{background:#b42332}
+button:disabled{opacity:.45}.hint{color:#667085;font-size:.9rem;line-height:1.5}.messages{min-height:120px;max-height:300px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px}.msg{padding:10px;background:#e7efff;border-radius:8px;margin:7px 0;overflow-wrap:anywhere}.meta{font-size:.78rem;color:#56647a}.log{white-space:pre-wrap;overflow-wrap:anywhere;background:#111827;color:#d1e3ff;padding:12px;border-radius:8px;max-height:220px;overflow:auto;font:12px/1.5 monospace}
+@media(max-width:650px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><main>
+<h1>Live Messaging Test Client</h1>
+<p class="hint">Open this page in two tabs. Use a different user's JWT in each tab and the same conversation ID.</p>
+<section class="panel"><div class="grid">
+<div><label for="url">WebSocket URL</label><input id="url" value="ws://localhost:2026/ws"></div>
+<div><label for="conversation">Conversation ID</label><input id="conversation" type="number" min="1" placeholder="e.g. 5"></div>
+<div><label for="token">JWT token</label><textarea id="token" placeholder="Paste login JWT (Bearer prefix optional)"></textarea><p class="hint">Token is not saved to storage.</p></div>
+<div><label for="content">Message</label><textarea id="content" placeholder="Type message..."></textarea></div>
+</div><button id="connect">Connect</button><button id="subscribe" class="secondary" disabled>Subscribe</button><button id="send" disabled>Send message</button><button id="disconnect" class="danger" disabled>Disconnect</button><button id="clear" class="secondary">Clear output</button>
+<p id="status">Disconnected</p><p class="hint">Subscribe: <code>/topic/conversations/{ID}</code><br>Send: <code>/app/conversations/{ID}/messages</code></p></section>
+<section class="panel"><h2>Received messages</h2><div id="messages" class="messages">Messages will appear here.</div></section>
+<section class="panel"><h2>Connection log</h2><div id="log" class="log">Ready.</div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js"></script>
+<script>
+(() => {
+const $=id=>document.getElementById(id); let client=null, subscription=null;
+function log(msg,data){$('log').textContent='['+new Date().toLocaleTimeString()+'] '+msg+(data===undefined?'':'\n'+(typeof data==='string'?data:JSON.stringify(data,null,2)))+'\n'+$('log').textContent;}
+function conversationId(){const id=Number($('conversation').value);if(!Number.isSafeInteger(id)||id<1)throw Error('Enter a valid Conversation ID.');return id;}
+function tokenValue(){let t=$('token').value.trim();if(t.startsWith('Bearer '))t=t.slice(7).trim();if(!t)throw Error('Paste JWT token first.');return t;}
+function showMessage(body,headers){const item=document.createElement('div');item.className='msg';const meta=document.createElement('div');meta.className='meta';meta.textContent='Received '+new Date().toLocaleTimeString()+(headers&&headers['message-id']?' · '+headers['message-id']:'');const content=document.createElement('div');try{const p=JSON.parse(body);content.textContent=(p.senderUsername||'User')+': '+(p.content||body);}catch{content.textContent=body;}item.append(meta,content);$('messages').prepend(item);}
+$('connect').onclick=()=>{try{if(client&&client.active)throw Error('Client already active.');const url=$('url').value.trim();if(!url)throw Error('Enter WebSocket URL.');client=new StompJs.Client({brokerURL:url,connectHeaders:{Authorization:'Bearer '+tokenValue()},reconnectDelay:0,heartbeatIncoming:10000,heartbeatOutgoing:10000,debug:s=>log('STOMP',s)});client.onConnect=f=>{$('status').textContent='Connected';$('connect').disabled=true;$('disconnect').disabled=false;$('subscribe').disabled=false;$('send').disabled=false;log('STOMP connected',f.headers);};client.onStompError=f=>{ $('status').textContent='STOMP error';log('Broker error',f.body);};client.onWebSocketError=()=>{$('status').textContent='WebSocket error';log('WebSocket error; check backend logs and URL.');};client.onWebSocketClose=e=>{$('status').textContent='Disconnected';$('connect').disabled=false;$('disconnect').disabled=true;$('subscribe').disabled=true;$('send').disabled=true;log('WebSocket closed: '+e.code);};$('status').textContent='Connecting...';log('Connecting to '+url);client.activate();}catch(e){log(e.message);$('status').textContent='Input error';}};
+$('subscribe').onclick=()=>{try{if(!client||!client.connected)throw Error('Connect first.');if(subscription)subscription.unsubscribe();const id=conversationId();subscription=client.subscribe('/topic/conversations/'+id,m=>{showMessage(m.body,m.headers);log('MESSAGE received',m.body);},{id:'conversation-'+id});log('Subscribed to /topic/conversations/'+id);}catch(e){log(e.message);}};
+$('send').onclick=()=>{try{if(!client||!client.connected)throw Error('Connect first.');const id=conversationId(),content=$('content').value.trim();if(!content)throw Error('Enter message text.');client.publish({destination:'/app/conversations/'+id+'/messages',headers:{'content-type':'application/json'},body:JSON.stringify({content})});log('SEND queued to /app/conversations/'+id+'/messages',{content});$('content').value='';}catch(e){log(e.message);}};
+$('disconnect').onclick=async()=>{try{if(subscription){subscription.unsubscribe();subscription=null;}if(client)await client.deactivate();$('status').textContent='Disconnected';$('connect').disabled=false;$('disconnect').disabled=true;$('subscribe').disabled=true;$('send').disabled=true;log('Disconnected by user.');}catch(e){log(e.message);}};
+$('clear').onclick=()=>{$('messages').replaceChildren();$('log').textContent='Output cleared.';};
+})();
+</script></body></html>
